@@ -10,6 +10,8 @@ export const dailyNewsJob = defineJob({
   description: 'Tự động thu thập, lọc trùng và gửi điểm tin tức hàng ngày',
   cronSchedule: process.env.CRON_SCHEDULE || '30 6 * * *',
   command: 'digest',
+  botType: 'MAIN',
+  targetChatId: (config) => config.TELEGRAM_NEWS_CHAT_ID || config.TELEGRAM_CHAT_ID,
   retryConfig: {
     maxRetries: 3,
     retryDelayMs: 300000, // 5 phút

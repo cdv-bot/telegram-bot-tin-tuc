@@ -10,9 +10,14 @@ export class SchedulerEngine {
   private cronInstances: Map<string, Cron> = new Map();
   private runningJobs: Set<string> = new Set();
   private bot: Bot | null = null;
+  private forexBot: Bot | null = null;
 
   setBot(bot: Bot) {
     this.bot = bot;
+  }
+
+  setForexBot(forexBot: Bot) {
+    this.forexBot = forexBot;
   }
 
   /**
@@ -27,20 +32,28 @@ export class SchedulerEngine {
       return { success: false, error: 'JOB_ALREADY_RUNNING', durationMs: 0 };
     }
 
-    if (!this.bot) {
+    const botToUse = (job.botType === 'FOREX' && this.forexBot) ? this.forexBot : (this.bot || this.forexBot);
+
+    if (!botToUse) {
       throw new Error('Bot instance chưa được thiết lập trong SchedulerEngine.');
     }
 
     this.runningJobs.add(job.id);
     const startTime = Date.now();
     const config = getConfig();
-    const targetChatId = options.customChatId || config.TELEGRAM_CHAT_ID;
+    let jobDefaultChatId: string | number | undefined;
+    if (typeof job.targetChatId === 'function') {
+      jobDefaultChatId = job.targetChatId(config);
+    } else if (job.targetChatId) {
+      jobDefaultChatId = job.targetChatId;
+    }
+    const targetChatId = options.customChatId || jobDefaultChatId || config.TELEGRAM_CHAT_ID;
     const triggerType = options.triggerType || 'CRON';
 
     logger.info(`🚀 [Job: ${job.id}] Bắt đầu thực thi (Kích hoạt bởi: ${triggerType})...`);
 
     const ctx: JobContext = {
-      bot: this.bot,
+      bot: botToUse,
       logger,
       targetChatId,
       triggerType,
@@ -69,7 +82,7 @@ export class SchedulerEngine {
       // 2. Gửi tin qua Telegram với Retry nếu có nội dung tin nhắn
       if (!skipDelivery && messagesToSend.length > 0) {
         const deliveryResult = await sendMessagesWithRetry(
-          this.bot,
+          botToUse,
           job.id,
           messagesToSend,
           {

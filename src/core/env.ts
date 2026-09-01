@@ -6,8 +6,14 @@ dotenv.config();
 
 const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1, 'TELEGRAM_BOT_TOKEN is required in .env'),
+  TELEGRAM_FOREX_BOT_TOKEN: z.string().optional().default(''),
   TELEGRAM_CHAT_ID: z.string().min(1, 'TELEGRAM_CHAT_ID is required in .env'),
   TELEGRAM_ADMIN_CHAT_ID: z.string().optional().default(''),
+  TELEGRAM_FOREX_CHAT_ID: z.string().optional().default(''),
+  TELEGRAM_TRADING_CHAT_ID: z.string().optional().default(''),
+  TELEGRAM_GITHUB_CHAT_ID: z.string().optional().default(''),
+  TELEGRAM_NEWS_CHAT_ID: z.string().optional().default(''),
+  TELEGRAM_GOLD_CHAT_ID: z.string().optional().default(''),
   CRON_SCHEDULE: z.string().default('30 6 * * *'),
   TIMEZONE: z.string().default('Asia/Ho_Chi_Minh'),
   MAX_RETRIES: z.coerce.number().default(3),
@@ -20,6 +26,8 @@ const envSchema = z.object({
   NINE_ROUTER_MODEL: z.string().default('ag/gemini-3.7-flash-medium'),
   MAX_ARTICLES_PER_DIGEST: z.coerce.number().default(8),
   LOG_LEVEL: z.string().default('info'),
+  TWELVE_DATA_API_KEY: z.string().optional().default('f14e12fd8f84461bbba9c981dbb46ba4'),
+  TWELVE_DATA_WS_URL: z.string().default('wss://ws.twelvedata.com/v1/quotes/price'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

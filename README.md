@@ -75,9 +75,10 @@ TIMEZONE="Asia/Ho_Chi_Minh"
 | Lệnh | Mục đích |
 | :--- | :--- |
 | `npm run bot:check` | Kiểm tra kết nối Telegram API & liệt kê danh sách Jobs đã nạp |
-| `npm run job:run <job_id>` | **Kích hoạt chạy thử ngay bất kỳ Job nào** (vd: `npm run job:run daily-news`) |
+| `npm run job:run <job_id>` | **Kích hoạt chạy thử ngay bất kỳ Job nào** (vd: `npm run job:run github-trending`) |
+| `npm run github:now` | Lấy nhanh top GitHub Trending repositories |
 | `npm run digest:now` | Chạy nhanh tính năng Bản tin sáng |
-| `npm test` | Chạy toàn bộ 15 Unit & Integration tests |
+| `npm test` | Chạy toàn bộ Unit & Integration tests |
 | `npm run build` | Biên dịch TypeScript |
 | `npm start` | Chạy toàn bộ hệ thống Bot & Scheduler |
 
@@ -99,11 +100,10 @@ src/
 │
 ├── jobs/                         # DANH SÁCH CÁC TÍNH NĂNG TỰ ĐỘNG (PLUGINS)
 │   ├── dailyNews/                # Tính năng 1: Bản tin tức hàng ngày (6h30)
-│   │   ├── index.ts              # defineJob({ id: 'daily-news', ... })
-│   │   ├── fetcher.ts            # Thu thập RSS
-│   │   ├── deduplicator.ts       # Lọc trùng 48h & độ tương đồng
-│   │   ├── summarizer.ts         # Tóm tắt súc tích
-│   │   └── formatter.ts          # Template HTML
+│   ├── githubTrending/           # Tính năng 2: GitHub Trending Repositories (/github-trending)
+│   │   ├── index.ts              # defineJob({ id: 'github-trending', ... })
+│   │   ├── fetcher.ts            # Thu thập GitHub Trending
+│   │   └── formatter.ts          # Template HTML đẹp mắt
 │   └── index.ts                  # Central Registry Exporter
 │
 ├── cli/

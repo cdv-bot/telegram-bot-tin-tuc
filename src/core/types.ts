@@ -29,6 +29,8 @@ export interface BotJob {
   cronSchedule: string; // e.g. "30 6 * * *"
   timezone?: string;
   command?: string; // e.g. "digest" -> triggers on /digest
+  targetChatId?: string | number | ((config: any) => string | number | undefined);
+  botType?: 'MAIN' | 'FOREX';
   enabled?: boolean;
   retryConfig?: JobRetryConfig;
   run: (ctx: JobContext) => Promise<string | string[] | JobResult | void>;

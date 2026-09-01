@@ -9,8 +9,15 @@
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "job:run": "tsx src/cli/runJob.ts",
+    "gold:now": "tsx src/cli/runJob.ts gold-price",
+    "github:now": "tsx src/cli/runJob.ts github-trending",
     "digest:now": "tsx src/cli/manualDigest.ts",
     "bot:check": "tsx src/cli/checkConnection.ts",
+    "pm2:start": "npm run build && npx pm2 start dist/index.js --name telegram-bot",
+    "pm2:stop": "npx pm2 stop telegram-bot",
+    "pm2:restart": "npm run build && npx pm2 restart telegram-bot",
+    "pm2:logs": "npx pm2 logs telegram-bot",
+    "pm2:log": "npx pm2 logs telegram-bot",
     "test": "vitest run"
   },
   "keywords": [
