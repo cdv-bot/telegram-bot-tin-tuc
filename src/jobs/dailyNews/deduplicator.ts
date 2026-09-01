@@ -1,56 +1,78 @@
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
-import { PATHS } from '../../core/env.js';
+import { db } from '../../core/database.js';
 import { logger } from '../../core/logger.js';
 import type { RawArticle } from './fetcher.js';
 
-interface HistoryEntry {
+export interface HistoryEntry {
   id: string;
   url: string;
   title: string;
   sentAt: string;
 }
 
-const historyFilePath = path.join(PATHS.data, 'history.json');
+interface NewsRow {
+  id: string;
+  url: string;
+  title: string;
+  sent_at: string;
+}
+
 const HISTORY_RETENTION_HOURS = 48;
 
 export function loadHistory(): HistoryEntry[] {
   try {
-    if (!fs.existsSync(historyFilePath)) {
-      return [];
-    }
-    const data = fs.readFileSync(historyFilePath, 'utf-8');
-    const list: HistoryEntry[] = JSON.parse(data);
-    const cutoff = Date.now() - HISTORY_RETENTION_HOURS * 60 * 60 * 1000;
-    return list.filter((item) => new Date(item.sentAt).getTime() > cutoff);
+    const cutoff = new Date(Date.now() - HISTORY_RETENTION_HOURS * 60 * 60 * 1000).toISOString();
+    // Tự động dọn dẹp các bản ghi cũ hơn 48h
+    db.prepare(`DELETE FROM news_history WHERE sent_at < ?`).run(cutoff);
+
+    // Lấy các bài báo đã gửi còn trong thời hạn lưu trữ
+    const rows = db.prepare(
+      `SELECT * FROM news_history WHERE sent_at >= ? ORDER BY sent_at DESC`
+    ).all(cutoff) as NewsRow[];
+
+    return rows.map((r) => ({
+      id: r.id,
+      url: r.url,
+      title: r.title,
+      sentAt: r.sent_at,
+    }));
   } catch (error) {
-    logger.error({ error }, 'Lỗi đọc history.json, khởi tạo danh sách trống.');
+    logger.error({ error }, 'Lỗi đọc news_history từ SQLite, khởi tạo danh sách trống.');
     return [];
   }
 }
 
 export function saveHistory(entries: HistoryEntry[]) {
   try {
-    fs.writeFileSync(historyFilePath, JSON.stringify(entries, null, 2), 'utf-8');
+    const insertStmt = db.prepare(`
+      INSERT OR REPLACE INTO news_history (id, url, title, sent_at)
+      VALUES (@id, @url, @title, @sentAt)
+    `);
+    const insertMany = db.transaction((list: HistoryEntry[]) => {
+      for (const item of list) {
+        insertStmt.run({
+          id: item.id,
+          url: item.url,
+          title: item.title,
+          sentAt: item.sentAt || new Date().toISOString(),
+        });
+      }
+    });
+    insertMany(entries);
   } catch (error) {
-    logger.error({ error }, 'Lỗi lưu history.json');
+    logger.error({ error }, 'Lỗi lưu news_history vào SQLite');
   }
 }
 
 export function recordSentArticles(articles: { link: string; title: string }[]) {
-  const current = loadHistory();
   const now = new Date().toISOString();
-  for (const a of articles) {
-    const id = generateArticleId(a.link, a.title);
-    current.push({
-      id,
-      url: a.link,
-      title: a.title,
-      sentAt: now,
-    });
-  }
-  saveHistory(current);
+  const entries: HistoryEntry[] = articles.map((a) => ({
+    id: generateArticleId(a.link, a.title),
+    url: a.link,
+    title: a.title,
+    sentAt: now,
+  }));
+  saveHistory(entries);
 }
 
 export function generateArticleId(url: string, title: string): string {

@@ -1,8 +1,6 @@
-import fs from 'fs';
-import path from 'path';
 import type { Bot } from 'grammy';
 import { logger } from '../../core/logger.js';
-import { PATHS } from '../../core/env.js';
+import { db } from '../../core/database.js';
 import { twelveDataClient, type TwelveDataGoldQuote } from '../goldPrice/twelveDataClient.js';
 import type { ParsedTradeOrder } from './parser.js';
 
@@ -19,17 +17,97 @@ export interface TrackedOrder extends ParsedTradeOrder {
   closePrice?: number;
 }
 
-class OrderTracker {
-  private orders: TrackedOrder[] = [];
-  private bot: Bot | null = null;
-  private filePath: string;
-  private isInitialized: boolean = false;
+interface OrderRow {
+  id: string;
+  chat_id: string;
+  symbol: string;
+  order_type: string;
+  entry: number;
+  tp: number | null;
+  sl: number | null;
+  reward: number | null;
+  risk: number | null;
+  risk_reward_ratio: number | null;
+  tp_percent: number | null;
+  sl_percent: number | null;
+  status: 'PENDING' | 'FILLED' | 'CLOSED_TP' | 'CLOSED_SL' | 'CANCELLED';
+  initial_market_price: number | null;
+  last_checked_price: number | null;
+  fill_price: number | null;
+  close_price: number | null;
+  created_at: string;
+  filled_at: string | null;
+  closed_at: string | null;
+}
 
+function rowToOrder(row: OrderRow): TrackedOrder {
+  return {
+    id: row.id,
+    chatId: row.chat_id,
+    symbol: row.symbol,
+    orderType: row.order_type as any,
+    entry: row.entry,
+    tp: row.tp !== null ? row.tp : undefined,
+    sl: row.sl !== null ? row.sl : undefined,
+    reward: row.reward !== null ? row.reward : undefined,
+    risk: row.risk !== null ? row.risk : undefined,
+    riskRewardRatio: row.risk_reward_ratio !== null ? row.risk_reward_ratio : undefined,
+    tpPercent: row.tp_percent !== null ? row.tp_percent : undefined,
+    slPercent: row.sl_percent !== null ? row.sl_percent : undefined,
+    status: row.status,
+    initialMarketPrice: row.initial_market_price !== null ? row.initial_market_price : undefined,
+    lastCheckedPrice: row.last_checked_price !== null ? row.last_checked_price : undefined,
+    fillPrice: row.fill_price !== null ? row.fill_price : undefined,
+    closePrice: row.close_price !== null ? row.close_price : undefined,
+    createdAt: row.created_at,
+    filledAt: row.filled_at !== null ? row.filled_at : undefined,
+    closedAt: row.closed_at !== null ? row.closed_at : undefined,
+  };
+}
+
+class OrderTracker {
+  private bot: Bot | null = null;
+  private isInitialized: boolean = false;
   private pollingIntervalId: NodeJS.Timeout | null = null;
 
+  // Prepared statements để tối ưu tốc độ truy vấn SQLite
+  private insertOrderStmt = db.prepare(`
+    INSERT INTO tracked_orders (
+      id, chat_id, symbol, order_type, entry, tp, sl,
+      reward, risk, risk_reward_ratio, tp_percent, sl_percent,
+      status, initial_market_price, last_checked_price, fill_price, close_price,
+      created_at, filled_at, closed_at
+    ) VALUES (
+      @id, @chatId, @symbol, @orderType, @entry, @tp, @sl,
+      @reward, @risk, @riskRewardRatio, @tpPercent, @slPercent,
+      @status, @initialMarketPrice, @lastCheckedPrice, @fillPrice, @closePrice,
+      @createdAt, @filledAt, @closedAt
+    )
+  `);
+
+  private updateLastCheckedPriceStmt = db.prepare(`
+    UPDATE tracked_orders SET last_checked_price = ? WHERE id = ?
+  `);
+
+  private updateFillStatusStmt = db.prepare(`
+    UPDATE tracked_orders
+    SET status = 'FILLED',
+        filled_at = @filledAt,
+        fill_price = @fillPrice,
+        last_checked_price = @lastCheckedPrice
+    WHERE id = @id
+  `);
+
+  private updateCloseStatusStmt = db.prepare(`
+    UPDATE tracked_orders
+    SET status = @status,
+        closed_at = @closedAt,
+        close_price = @closePrice,
+        last_checked_price = @lastCheckedPrice
+    WHERE id = @id
+  `);
+
   constructor() {
-    this.filePath = path.join(PATHS.data, 'limit_orders.json');
-    this.loadOrders();
     this.initPriceListener();
     this.startPollingWatchdog();
   }
@@ -66,33 +144,6 @@ class OrderTracker {
     }, 1000);
   }
 
-  private loadOrders() {
-    try {
-      if (!fs.existsSync(PATHS.data)) {
-        fs.mkdirSync(PATHS.data, { recursive: true });
-      }
-      if (fs.existsSync(this.filePath)) {
-        const raw = fs.readFileSync(this.filePath, 'utf-8');
-        this.orders = JSON.parse(raw);
-        logger.info(`Đã nạp ${this.orders.length} lệnh từ file dữ liệu.`);
-      }
-    } catch (err: any) {
-      logger.warn({ error: err.message }, 'Không thể nạp danh sách lệnh cũ');
-      this.orders = [];
-    }
-  }
-
-  private saveOrders() {
-    try {
-      if (!fs.existsSync(PATHS.data)) {
-        fs.mkdirSync(PATHS.data, { recursive: true });
-      }
-      fs.writeFileSync(this.filePath, JSON.stringify(this.orders, null, 2), 'utf-8');
-    } catch (err: any) {
-      logger.error({ error: err.message }, 'Lỗi khi lưu danh sách lệnh');
-    }
-  }
-
   private initPriceListener() {
     if (this.isInitialized) return;
     this.isInitialized = true;
@@ -107,6 +158,7 @@ class OrderTracker {
     const id = `ORD-${Date.now().toString().slice(-6)}`;
     const currentCached = twelveDataClient.getLatestCachedQuote();
     const initialMarketPrice = currentCached?.price;
+    const createdAt = new Date().toISOString();
 
     const tracked: TrackedOrder = {
       ...order,
@@ -116,86 +168,112 @@ class OrderTracker {
       status: 'PENDING',
       initialMarketPrice,
       lastCheckedPrice: initialMarketPrice,
-      createdAt: new Date().toISOString(),
+      createdAt,
     };
 
-    this.orders.push(tracked);
-    this.saveOrders();
-    logger.info({ id, type: tracked.orderType, entry: tracked.entry, initialMarketPrice }, '✅ Đã ghi nhận lệnh limit mới vào hệ thống giám sát');
+    this.insertOrderStmt.run({
+      id: tracked.id,
+      chatId: String(tracked.chatId),
+      symbol: tracked.symbol,
+      orderType: tracked.orderType,
+      entry: tracked.entry,
+      tp: tracked.tp ?? null,
+      sl: tracked.sl ?? null,
+      reward: tracked.reward ?? null,
+      risk: tracked.risk ?? null,
+      riskRewardRatio: tracked.riskRewardRatio ?? null,
+      tpPercent: tracked.tpPercent ?? null,
+      slPercent: tracked.slPercent ?? null,
+      status: tracked.status,
+      initialMarketPrice: tracked.initialMarketPrice ?? null,
+      lastCheckedPrice: tracked.lastCheckedPrice ?? null,
+      fillPrice: null,
+      closePrice: null,
+      createdAt: tracked.createdAt,
+      filledAt: null,
+      closedAt: null,
+    });
+
+    logger.info({ id, type: tracked.orderType, entry: tracked.entry, initialMarketPrice }, '✅ Đã ghi nhận lệnh limit mới vào SQLite');
     return tracked;
   }
 
   public getActiveOrders(chatId?: number | string): TrackedOrder[] {
-    return this.orders.filter(
-      (o) => (o.status === 'PENDING' || o.status === 'FILLED') && (!chatId || String(o.chatId) === String(chatId))
-    );
+    let rows: OrderRow[];
+    if (chatId) {
+      rows = db.prepare(
+        `SELECT * FROM tracked_orders WHERE (status = 'PENDING' OR status = 'FILLED') AND chat_id = ? ORDER BY created_at ASC`
+      ).all(String(chatId)) as OrderRow[];
+    } else {
+      rows = db.prepare(
+        `SELECT * FROM tracked_orders WHERE status = 'PENDING' OR status = 'FILLED' ORDER BY created_at ASC`
+      ).all() as OrderRow[];
+    }
+    return rows.map(rowToOrder);
   }
 
   public cancelOrder(id: string, chatId?: number | string): boolean {
     const cleanId = id.trim().replace(/^[#]/, '').toLowerCase();
-    const order = this.orders.find(
-      (o) =>
-        (o.id.toLowerCase() === cleanId ||
-          o.id.toLowerCase() === `ord-${cleanId}` ||
-          o.id.toLowerCase().endsWith(cleanId)) &&
-        (!chatId || String(o.chatId) === String(chatId))
-    );
-    if (!order || order.status === 'CLOSED_TP' || order.status === 'CLOSED_SL' || order.status === 'CANCELLED') {
+    const row = (chatId
+      ? db.prepare(
+          `SELECT * FROM tracked_orders WHERE (LOWER(id) = ? OR LOWER(id) = ? OR LOWER(id) LIKE ?) AND chat_id = ?`
+        ).get(cleanId, `ord-${cleanId}`, `%${cleanId}`, String(chatId))
+      : db.prepare(
+          `SELECT * FROM tracked_orders WHERE (LOWER(id) = ? OR LOWER(id) = ? OR LOWER(id) LIKE ?)`
+        ).get(cleanId, `ord-${cleanId}`, `%${cleanId}`)) as OrderRow | undefined;
+
+    if (!row || row.status === 'CLOSED_TP' || row.status === 'CLOSED_SL' || row.status === 'CANCELLED') {
       return false;
     }
-    order.status = 'CANCELLED';
-    order.closedAt = new Date().toISOString();
-    this.saveOrders();
+
+    db.prepare(`UPDATE tracked_orders SET status = 'CANCELLED', closed_at = ? WHERE id = ?`).run(
+      new Date().toISOString(),
+      row.id
+    );
     return true;
   }
 
   public deleteOrder(id: string, chatId?: number | string): boolean {
     const cleanId = id.trim().replace(/^[#]/, '').toLowerCase();
-    const initialLen = this.orders.length;
-    this.orders = this.orders.filter(
-      (o) =>
-        !(
-          (o.id.toLowerCase() === cleanId ||
-            o.id.toLowerCase() === `ord-${cleanId}` ||
-            o.id.toLowerCase().endsWith(cleanId)) &&
-          (!chatId || String(o.chatId) === String(chatId))
-        )
-    );
-    if (this.orders.length !== initialLen) {
-      this.saveOrders();
-      return true;
-    }
-    return false;
+    const result = chatId
+      ? db.prepare(
+          `DELETE FROM tracked_orders WHERE (LOWER(id) = ? OR LOWER(id) = ? OR LOWER(id) LIKE ?) AND chat_id = ?`
+        ).run(cleanId, `ord-${cleanId}`, `%${cleanId}`, String(chatId))
+      : db.prepare(
+          `DELETE FROM tracked_orders WHERE (LOWER(id) = ? OR LOWER(id) = ? OR LOWER(id) LIKE ?)`
+        ).run(cleanId, `ord-${cleanId}`, `%${cleanId}`);
+
+    return result.changes > 0;
   }
 
   public cancelAllOrders(chatId?: number | string): number {
-    const active = this.getActiveOrders(chatId);
-    active.forEach((o) => {
-      o.status = 'CANCELLED';
-      o.closedAt = new Date().toISOString();
-    });
-    this.saveOrders();
-    return active.length;
+    const now = new Date().toISOString();
+    const result = chatId
+      ? db.prepare(
+          `UPDATE tracked_orders SET status = 'CANCELLED', closed_at = ? WHERE (status = 'PENDING' OR status = 'FILLED') AND chat_id = ?`
+        ).run(now, String(chatId))
+      : db.prepare(
+          `UPDATE tracked_orders SET status = 'CANCELLED', closed_at = ? WHERE status = 'PENDING' OR status = 'FILLED'`
+        ).run(now);
+
+    return result.changes;
   }
 
   public deleteAllOrders(chatId?: number | string): number {
-    const initialLen = this.orders.length;
-    if (!chatId) {
-      this.orders = [];
-    } else {
-      this.orders = this.orders.filter((o) => String(o.chatId) !== String(chatId));
-    }
-    this.saveOrders();
-    return initialLen - this.orders.length;
+    const result = chatId
+      ? db.prepare(`DELETE FROM tracked_orders WHERE chat_id = ?`).run(String(chatId))
+      : db.prepare(`DELETE FROM tracked_orders`).run();
+
+    return result.changes;
   }
 
   /**
    * Kiểm tra giá thị trường theo thời gian thực chuẩn cơ chế Forex đa chiều & siêu nhạy
    */
   public async checkOrdersAgainstPrice(currentPrice: number, symbol: string = 'XAU/USD') {
-    if (!this.bot || this.orders.length === 0) return;
+    if (!this.bot) return;
 
-    const activeOrders = this.orders.filter((o) => o.status === 'PENDING' || o.status === 'FILLED');
+    const activeOrders = this.getActiveOrders();
     if (activeOrders.length === 0) return;
 
     const curP = Number(currentPrice.toFixed(2));
@@ -203,7 +281,7 @@ class OrderTracker {
 
     logger.info(
       { currentPrice: curP, rawPrice: currentPrice, symbol, activeCount: activeOrders.length },
-      `📊 [PRICE CHECK] Giá Live: ${curP} | Kiểm tra ${activeOrders.length} lệnh (${activeOrders.map(o => `#${o.id}:${o.orderType}@${o.entry}`).join(', ')})`
+      `📊 [PRICE CHECK] Giá Live: ${curP} | Kiểm tra ${activeOrders.length} lệnh (${activeOrders.map((o) => `#${o.id}:${o.orderType}@${o.entry}`).join(', ')})`
     );
 
     for (const order of activeOrders) {
@@ -212,8 +290,16 @@ class OrderTracker {
       // 1. Kiểm tra khớp Entry cho lệnh PENDING (Bắt trọn cả Limit, Stop, Quét qua và Dung sai)
       if (order.status === 'PENDING') {
         let isFilled = false;
-        const prevPrice = order.lastCheckedPrice !== undefined ? Number(order.lastCheckedPrice.toFixed(2)) : (order.initialMarketPrice !== undefined ? Number(order.initialMarketPrice.toFixed(2)) : curP);
-        const initPrice = order.initialMarketPrice !== undefined ? Number(order.initialMarketPrice.toFixed(2)) : prevPrice;
+        const prevPrice =
+          order.lastCheckedPrice !== undefined
+            ? Number(order.lastCheckedPrice.toFixed(2))
+            : order.initialMarketPrice !== undefined
+            ? Number(order.initialMarketPrice.toFixed(2))
+            : curP;
+        const initPrice =
+          order.initialMarketPrice !== undefined
+            ? Number(order.initialMarketPrice.toFixed(2))
+            : prevPrice;
 
         // Cơ chế 1: Giá chạm đúng điểm Entry (trong phạm vi dung sai 0.05$)
         if (Math.abs(curP - entry) <= EPSILON) {
@@ -244,13 +330,19 @@ class OrderTracker {
           }
         }
 
-        order.lastCheckedPrice = curP;
-
         if (isFilled) {
+          const filledAt = new Date().toISOString();
+          this.updateFillStatusStmt.run({
+            id: order.id,
+            filledAt,
+            fillPrice: curP,
+            lastCheckedPrice: curP,
+          });
+
           order.status = 'FILLED';
-          order.filledAt = new Date().toISOString();
+          order.filledAt = filledAt;
           order.fillPrice = curP;
-          this.saveOrders();
+          order.lastCheckedPrice = curP;
 
           logger.info(
             { orderId: order.id, type: order.orderType, entry, currentPrice: curP, chatId: order.chatId },
@@ -258,40 +350,59 @@ class OrderTracker {
           );
 
           await this.sendNotification(order.chatId, this.formatFillNotification(order, curP));
+        } else {
+          this.updateLastCheckedPriceStmt.run(curP, order.id);
+          order.lastCheckedPrice = curP;
         }
       }
       // 2. Kiểm tra TP / SL cho lệnh đã FILLED
       else if (order.status === 'FILLED') {
         const isBuy = order.orderType.startsWith('BUY');
-        const prevPrice = order.lastCheckedPrice !== undefined ? Number(order.lastCheckedPrice.toFixed(2)) : curP;
+        const prevPrice =
+          order.lastCheckedPrice !== undefined ? Number(order.lastCheckedPrice.toFixed(2)) : curP;
         let isTpHit = false;
         let isSlHit = false;
 
         if (order.tp !== undefined) {
           const tp = Number(order.tp.toFixed(2));
           if (isBuy) {
-            isTpHit = curP >= tp - EPSILON || (Math.min(prevPrice, curP) <= tp && tp <= Math.max(prevPrice, curP));
+            isTpHit =
+              curP >= tp - EPSILON ||
+              (Math.min(prevPrice, curP) <= tp && tp <= Math.max(prevPrice, curP));
           } else {
-            isTpHit = curP <= tp + EPSILON || (Math.min(prevPrice, curP) <= tp && tp <= Math.max(prevPrice, curP));
+            isTpHit =
+              curP <= tp + EPSILON ||
+              (Math.min(prevPrice, curP) <= tp && tp <= Math.max(prevPrice, curP));
           }
         }
 
         if (order.sl !== undefined && !isTpHit) {
           const sl = Number(order.sl.toFixed(2));
           if (isBuy) {
-            isSlHit = curP <= sl + EPSILON || (Math.min(prevPrice, curP) <= sl && sl <= Math.max(prevPrice, curP));
+            isSlHit =
+              curP <= sl + EPSILON ||
+              (Math.min(prevPrice, curP) <= sl && sl <= Math.max(prevPrice, curP));
           } else {
-            isSlHit = curP >= sl - EPSILON || (Math.min(prevPrice, curP) <= sl && sl <= Math.max(prevPrice, curP));
+            isSlHit =
+              curP >= sl - EPSILON ||
+              (Math.min(prevPrice, curP) <= sl && sl <= Math.max(prevPrice, curP));
           }
         }
 
-        order.lastCheckedPrice = curP;
-
         if (isTpHit) {
+          const closedAt = new Date().toISOString();
+          this.updateCloseStatusStmt.run({
+            id: order.id,
+            status: 'CLOSED_TP',
+            closedAt,
+            closePrice: curP,
+            lastCheckedPrice: curP,
+          });
+
           order.status = 'CLOSED_TP';
-          order.closedAt = new Date().toISOString();
+          order.closedAt = closedAt;
           order.closePrice = curP;
-          this.saveOrders();
+          order.lastCheckedPrice = curP;
 
           logger.info(
             { orderId: order.id, tp: order.tp, currentPrice: curP, chatId: order.chatId },
@@ -300,10 +411,19 @@ class OrderTracker {
 
           await this.sendNotification(order.chatId, this.formatTpNotification(order, curP));
         } else if (isSlHit) {
+          const closedAt = new Date().toISOString();
+          this.updateCloseStatusStmt.run({
+            id: order.id,
+            status: 'CLOSED_SL',
+            closedAt,
+            closePrice: curP,
+            lastCheckedPrice: curP,
+          });
+
           order.status = 'CLOSED_SL';
-          order.closedAt = new Date().toISOString();
+          order.closedAt = closedAt;
           order.closePrice = curP;
-          this.saveOrders();
+          order.lastCheckedPrice = curP;
 
           logger.info(
             { orderId: order.id, sl: order.sl, currentPrice: curP, chatId: order.chatId },
@@ -311,6 +431,9 @@ class OrderTracker {
           );
 
           await this.sendNotification(order.chatId, this.formatSlNotification(order, curP));
+        } else {
+          this.updateLastCheckedPriceStmt.run(curP, order.id);
+          order.lastCheckedPrice = curP;
         }
       }
     }
