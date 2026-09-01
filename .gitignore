@@ -1,0 +1,9 @@
+node_modules
+dist
+logs/*.log
+!logs/.gitkeep
+.env
+.DS_Store
+coverage
+data/history.json
+!data/.gitkeep

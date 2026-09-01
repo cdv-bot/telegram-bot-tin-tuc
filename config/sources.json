@@ -1,0 +1,98 @@
+[
+  {
+    "category": "🤖 AI & AI Agent Mới",
+    "name": "TechCrunch AI",
+    "url": "https://techcrunch.com/category/artificial-intelligence/feed/",
+    "enabled": true
+  },
+  {
+    "category": "🤖 AI & AI Agent Mới",
+    "name": "VentureBeat AI",
+    "url": "https://venturebeat.com/category/ai/feed/",
+    "enabled": true
+  },
+  {
+    "category": "🤖 AI & AI Agent Mới",
+    "name": "GenK Trí Tuệ Nhân Tạo",
+    "url": "https://genk.vn/rss/home.rss",
+    "enabled": true
+  },
+  {
+    "category": "💻 Lập Trình & Kỹ Thuật",
+    "name": "Dev.to",
+    "url": "https://dev.to/feed",
+    "enabled": true
+  },
+  {
+    "category": "💻 Lập Trình & Kỹ Thuật",
+    "name": "HackerNews",
+    "url": "https://news.ycombinator.com/rss",
+    "enabled": true
+  },
+  {
+    "category": "📱 Tin Tức Công Nghệ",
+    "name": "VnExpress Số Hóa",
+    "url": "https://vnexpress.net/rss/so-hoa.rss",
+    "enabled": true
+  },
+  {
+    "category": "📱 Tin Tức Công Nghệ",
+    "name": "Tinhte Công Nghệ",
+    "url": "https://tinhte.vn/rss",
+    "enabled": true
+  },
+  {
+    "category": "🥇 Giá Vàng & Thị Trường Vàng",
+    "name": "CafeF Thị Trường Vàng & Tiền Tệ",
+    "url": "https://cafef.vn/tai-chinh-ngan-hang.rss",
+    "enabled": true
+  },
+  {
+    "category": "🥇 Giá Vàng & Thị Trường Vàng",
+    "name": "CafeF Vĩ Mô & Hàng Hóa",
+    "url": "https://cafef.vn/vi-mo-dau-tu.rss",
+    "enabled": true
+  },
+  {
+    "category": "📈 Tin Tức Chứng Khoán",
+    "name": "CafeF Chứng Khoán Việt Nam",
+    "url": "https://cafef.vn/thi-truong-chung-khoan.rss",
+    "enabled": true
+  },
+  {
+    "category": "📈 Tin Tức Chứng Khoán",
+    "name": "CafeF Chứng Khoán & Tài Chính Quốc Tế",
+    "url": "https://cafef.vn/tai-chinh-quoc-te.rss",
+    "enabled": true
+  },
+  {
+    "category": "📈 Tin Tức Chứng Khoán",
+    "name": "VnExpress Kinh Doanh",
+    "url": "https://vnexpress.net/rss/kinh-doanh.rss",
+    "enabled": true
+  },
+  {
+    "category": "🇻🇳 Thời Sự Việt Nam",
+    "name": "VnExpress Thời Sự",
+    "url": "https://vnexpress.net/rss/thoi-su.rss",
+    "enabled": true
+  },
+  {
+    "category": "🇻🇳 Thời Sự Việt Nam",
+    "name": "Tuổi Trẻ Thời Sự",
+    "url": "https://tuoitre.vn/rss/thoi-su.rss",
+    "enabled": true
+  },
+  {
+    "category": "🌍 Tin Tức Quốc Tế & Tổng Hợp",
+    "name": "VnExpress Thế Giới",
+    "url": "https://vnexpress.net/rss/the-gioi.rss",
+    "enabled": true
+  },
+  {
+    "category": "🌍 Tin Tức Quốc Tế & Tổng Hợp",
+    "name": "Tuổi Trẻ Thế Giới",
+    "url": "https://tuoitre.vn/rss/the-gioi.rss",
+    "enabled": true
+  }
+]
