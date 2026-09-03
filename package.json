@@ -16,6 +16,8 @@
     "pm2:start": "npm run build && npx pm2 start dist/index.js --name telegram-bot",
     "pm2:stop": "npx pm2 stop telegram-bot",
     "pm2:restart": "npm run build && npx pm2 restart telegram-bot",
+    "pm2:status": "npx pm2 list",
+    "pm2:ls": "npx pm2 list",
     "pm2:logs": "npx pm2 logs telegram-bot",
     "pm2:log": "npx pm2 logs telegram-bot",
     "test": "vitest run"
