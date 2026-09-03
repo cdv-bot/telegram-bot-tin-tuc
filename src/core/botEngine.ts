@@ -107,6 +107,7 @@ export class BotEngine {
         await ctx.reply(`⏳ Đang tổng hợp <b>${job.name}</b>...`, { parse_mode: 'HTML' });
         const result = await schedulerEngine.executeJob(job, {
           customChatId: ctx.chat.id,
+          customBot: mainBot,
           triggerType: 'BOT_COMMAND',
         });
         if (!result.success) {
@@ -122,6 +123,7 @@ export class BotEngine {
         await ctx.reply(`⏳ Đang lấy danh sách <b>${job.name}</b>...`, { parse_mode: 'HTML' });
         const result = await schedulerEngine.executeJob(job, {
           customChatId: ctx.chat.id,
+          customBot: mainBot,
           triggerType: 'BOT_COMMAND',
         });
         if (!result.success) {
@@ -133,13 +135,14 @@ export class BotEngine {
     mainBot.hears(/^\/(?:github[-_]?trending|github)(?:@\w+)?(?:\s+(.*))?$/i, handleGitHubTrending);
     mainBot.command(['github_trending', 'githubtrending', 'github'], handleGitHubTrending);
 
-    // Lắng nghe lệnh Giá Vàng SJC Việt Nam (/price_gold, /sjc, /giavang...)
-    const handlePriceGold = async (ctx: any) => {
+    // Handler tạo lệnh Giá Vàng SJC theo đúng Bot tiếp nhận
+    const createPriceGoldHandler = (botInstance: Bot) => async (ctx: any) => {
       const job = jobRegistry.get('price-gold');
       if (job) {
         await ctx.reply('⏳ Đang lấy giá vàng SJC Việt Nam thời gian thực từ VNAppMob...', { parse_mode: 'HTML' });
         const result = await schedulerEngine.executeJob(job, {
           customChatId: ctx.chat.id,
+          customBot: botInstance,
           triggerType: 'BOT_COMMAND',
         });
         if (!result.success) {
@@ -148,8 +151,27 @@ export class BotEngine {
       }
     };
 
-    mainBot.hears(/^\/(?:price[-_]?gold|pricegold|sjc|gia[-_]?vang|gold[-_]?vn)(?:@\w+)?(?:\s+(.*))?$/i, handlePriceGold);
-    mainBot.command(['price_gold', 'pricegold', 'sjc', 'giavang', 'gia_vang'], handlePriceGold);
+    // Handler tạo lệnh Giá Vàng Thế Giới theo đúng Bot tiếp nhận
+    const createWorldGoldHandler = (botInstance: Bot) => async (ctx: any) => {
+      const job = jobRegistry.get('gold-price');
+      if (job) {
+        await ctx.reply('⏳ Đang lấy giá vàng thế giới realtime từ Gold Price API...', { parse_mode: 'HTML' });
+        const result = await schedulerEngine.executeJob(job, {
+          customChatId: ctx.chat.id,
+          customBot: botInstance,
+          triggerType: 'BOT_COMMAND',
+        });
+        if (!result.success) {
+          await ctx.reply(`❌ Có lỗi khi lấy giá vàng: ${result.error || 'Không xác định'}`);
+        }
+      }
+    };
+
+    // Đăng ký lệnh giá vàng trên Main Bot (Tin Tức)
+    mainBot.hears(/^\/(?:price[-_]?gold|pricegold|sjc|gia[-_]?vang|gold[-_]?vn)(?:@\w+)?(?:\s+(.*))?$/i, createPriceGoldHandler(mainBot));
+    mainBot.command(['price_gold', 'pricegold', 'sjc', 'giavang', 'gia_vang'], createPriceGoldHandler(mainBot));
+    mainBot.hears(/^\/(?:gold|xau|goldprice|vang)(?:@\w+)?(?:\s+(.*))?$/i, createWorldGoldHandler(mainBot));
+    mainBot.command(['gold', 'xau', 'goldprice', 'vang'], createWorldGoldHandler(mainBot));
 
     // Lệnh tiện ích chung trên Main Bot
     this.registerCommonCommands(mainBot, 'Tin Tức & GitHub Trending');
@@ -273,23 +295,12 @@ export class BotEngine {
     });
 
     // 2.5 Giá Vàng SJC Việt Nam (/price_gold, /sjc)
-    targetForexBot.hears(/^\/(?:price[-_]?gold|pricegold|sjc|gold[-_]?vn)(?:@\w+)?(?:\s+(.*))?$/i, handlePriceGold);
-    targetForexBot.command(['price_gold', 'pricegold', 'sjc'], handlePriceGold);
+    targetForexBot.hears(/^\/(?:price[-_]?gold|pricegold|sjc|gold[-_]?vn)(?:@\w+)?(?:\s+(.*))?$/i, createPriceGoldHandler(targetForexBot));
+    targetForexBot.command(['price_gold', 'pricegold', 'sjc'], createPriceGoldHandler(targetForexBot));
 
     // 2.6 Giá Vàng Thế Giới Realtime (/gold, /xau, /goldprice, /vang)
-    targetForexBot.hears(/^\/(?:gold|xau|goldprice|vang)(?:@\w+)?(?:\s+(.*))?$/i, async (ctx) => {
-      const job = jobRegistry.get('gold-price');
-      if (job) {
-        await ctx.reply(`⏳ Đang lấy giá vàng thế giới realtime từ Gold Price API...`, { parse_mode: 'HTML' });
-        const result = await schedulerEngine.executeJob(job, {
-          customChatId: ctx.chat.id,
-          triggerType: 'BOT_COMMAND',
-        });
-        if (!result.success) {
-          await ctx.reply(`❌ Có lỗi khi lấy giá vàng: ${result.error || 'Không xác định'}`);
-        }
-      }
-    });
+    targetForexBot.hears(/^\/(?:gold|xau|goldprice|vang)(?:@\w+)?(?:\s+(.*))?$/i, createWorldGoldHandler(targetForexBot));
+    targetForexBot.command(['gold', 'xau', 'goldprice', 'vang'], createWorldGoldHandler(targetForexBot));
 
     // Tiện ích chung trên Forex Bot
     if (forexBot) {
