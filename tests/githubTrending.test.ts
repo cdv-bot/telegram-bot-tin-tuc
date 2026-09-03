@@ -46,16 +46,14 @@ describe('GitHub Trending Job', () => {
     expect(job?.command).toBe('github_trending');
   });
 
-  it('should match all trending command regex variants including /gitjub-trending', () => {
-    const regex = /^\/(?:git[hj]ub[-_]?trending|git[hj]ub|trending)(?:@\w+)?(?:\s+(.*))?$/i;
-    expect(regex.test('/gitjub-trending')).toBe(true);
+  it('should match trending command regex variants', () => {
+    const regex = /^\/(?:github[-_]?trending|trending|github)(?:@\w+)?(?:\s+(.*))?$/i;
     expect(regex.test('/github-trending')).toBe(true);
-    expect(regex.test('/gitjub_trending')).toBe(true);
     expect(regex.test('/github_trending')).toBe(true);
-    expect(regex.test('/gitjub')).toBe(true);
     expect(regex.test('/github')).toBe(true);
     expect(regex.test('/trending')).toBe(true);
-    expect(regex.test('/gitjub-trending@mybot')).toBe(true);
+    expect(regex.test('/github_trending@mybot')).toBe(true);
+    expect(regex.test('/gitjub_trending')).toBe(false);
   });
 
   it('should route to TELEGRAM_GITHUB_CHAT_ID when configured', () => {

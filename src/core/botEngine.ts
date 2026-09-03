@@ -130,8 +130,8 @@ export class BotEngine {
       }
     };
 
-    mainBot.hears(/^\/(?:git[hj]ub[-_]?trending|git[hj]ub|trending)(?:@\w+)?(?:\s+(.*))?$/i, handleGitHubTrending);
-    mainBot.command(['github_trending', 'gitjub_trending', 'githubtrending', 'gitjubtrending', 'trending', 'github', 'gitjub'], handleGitHubTrending);
+    mainBot.hears(/^\/(?:github[-_]?trending|trending|github)(?:@\w+)?(?:\s+(.*))?$/i, handleGitHubTrending);
+    mainBot.command(['github_trending', 'githubtrending', 'trending', 'github'], handleGitHubTrending);
 
     // Lệnh tiện ích chung trên Main Bot
     this.registerCommonCommands(mainBot, 'Tin Tức & GitHub Trending');
@@ -303,7 +303,7 @@ export class BotEngine {
         msg += `• <b>/gold</b>: Xem giá vàng XAU/USD realtime\n`;
       } else {
         msg += `• <b>/digest</b>: Lấy bản tin điểm tin tức tổng hợp sáng\n`;
-        msg += `• <b>/gitjub-trending</b>: Xem top GitHub Trending Repositories\n`;
+        msg += `• <b>/github_trending</b>: Xem top GitHub Trending Repositories (hoặc /trending)\n`;
       }
 
       msg += `\n⚙️ <b>Lệnh hệ thống:</b>\n`;
@@ -343,7 +343,6 @@ export class BotEngine {
       const mainCommands = [
         { command: 'digest', description: 'Xem bản tin điểm tin tổng hợp sáng' },
         { command: 'github_trending', description: 'Top GitHub Trending hôm nay' },
-        { command: 'gitjub_trending', description: 'Top GitHub Trending (alias)' },
         { command: 'trending', description: 'Xem nhanh GitHub Trending' },
         { command: 'id', description: 'Xem Chat ID phòng chat hiện tại' },
         { command: 'status', description: 'Xem trạng thái hệ thống & lịch chạy' },
