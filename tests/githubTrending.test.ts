@@ -47,12 +47,12 @@ describe('GitHub Trending Job', () => {
   });
 
   it('should match trending command regex variants', () => {
-    const regex = /^\/(?:github[-_]?trending|trending|github)(?:@\w+)?(?:\s+(.*))?$/i;
+    const regex = /^\/(?:github[-_]?trending|github)(?:@\w+)?(?:\s+(.*))?$/i;
     expect(regex.test('/github-trending')).toBe(true);
     expect(regex.test('/github_trending')).toBe(true);
     expect(regex.test('/github')).toBe(true);
-    expect(regex.test('/trending')).toBe(true);
     expect(regex.test('/github_trending@mybot')).toBe(true);
+    expect(regex.test('/trending')).toBe(false);
     expect(regex.test('/gitjub_trending')).toBe(false);
   });
 
