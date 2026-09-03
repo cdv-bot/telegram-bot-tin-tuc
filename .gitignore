@@ -5,5 +5,5 @@ logs/*.log
 .env
 .DS_Store
 coverage
-data/history.json
+data/*
 !data/.gitkeep
