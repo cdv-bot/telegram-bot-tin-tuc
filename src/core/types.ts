@@ -26,12 +26,13 @@ export interface BotJob {
   id: string;
   name: string;
   description: string;
-  cronSchedule: string; // e.g. "30 6 * * *"
+  cronSchedule?: string; // e.g. "0 7 * * *"
   timezone?: string;
   command?: string; // e.g. "digest" -> triggers on /digest
   targetChatId?: string | number | ((config: any) => string | number | undefined);
   botType?: 'MAIN' | 'FOREX';
   enabled?: boolean;
+  autoSchedule?: boolean; // false nếu không muốn tự động gửi theo lịch Cron
   retryConfig?: JobRetryConfig;
   run: (ctx: JobContext) => Promise<string | string[] | JobResult | void>;
 }

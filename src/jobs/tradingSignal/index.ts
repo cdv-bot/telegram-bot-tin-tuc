@@ -6,7 +6,7 @@ export const tradingSignalJob = defineJob({
   id: 'trading-signal',
   name: 'Tín Hiệu Giao Dịch & Quản Lý Lệnh Limit',
   description: 'Tính toán và phát tín hiệu lệnh Buy/Sell Limit với Entry, TP, SL, R:R',
-  cronSchedule: '0 0 1 1 *', // Job chủ yếu kích hoạt theo lệnh Bot Command
+  autoSchedule: false, // Tắt tự động gửi định kỳ, chỉ kích hoạt khi gõ lệnh Bot hoặc khớp lệnh realtime
   command: 'bl',
   botType: 'FOREX',
   targetChatId: (config) => config.TELEGRAM_FOREX_CHAT_ID || config.TELEGRAM_TRADING_CHAT_ID || config.TELEGRAM_CHAT_ID,

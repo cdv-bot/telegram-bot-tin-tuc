@@ -14,7 +14,9 @@ const envSchema = z.object({
   TELEGRAM_GITHUB_CHAT_ID: z.string().optional().default(''),
   TELEGRAM_NEWS_CHAT_ID: z.string().optional().default(''),
   TELEGRAM_GOLD_CHAT_ID: z.string().optional().default(''),
-  CRON_SCHEDULE: z.string().default('30 6 * * *'),
+  CRON_SCHEDULE: z.string().default('0 7 * * *'),
+  GITHUB_TRENDING_AUTO: z.preprocess((val) => val === 'true' || val === true, z.boolean().default(false)),
+  GOLD_PRICE_AUTO: z.preprocess((val) => val === 'true' || val === true, z.boolean().default(false)),
   TIMEZONE: z.string().default('Asia/Ho_Chi_Minh'),
   MAX_RETRIES: z.coerce.number().default(3),
   RETRY_DELAY_MS: z.coerce.number().default(300000), // 5 minutes
