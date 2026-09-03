@@ -32,7 +32,7 @@ export class SchedulerEngine {
       return { success: false, error: 'JOB_ALREADY_RUNNING', durationMs: 0 };
     }
 
-    const botToUse = (job.botType === 'FOREX' && this.forexBot) ? this.forexBot : (this.bot || this.forexBot);
+    const botToUse = options.customBot || ((job.botType === 'FOREX' && this.forexBot) ? this.forexBot : (this.bot || this.forexBot));
 
     if (!botToUse) {
       throw new Error('Bot instance chưa được thiết lập trong SchedulerEngine.');

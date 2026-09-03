@@ -50,6 +50,7 @@ export interface DeliveryLog {
 
 export interface DeliveryOptions {
   customChatId?: string | number;
+  customBot?: Bot;
   overrideRetryDelayMs?: number;
   overrideMaxRetries?: number;
 }
