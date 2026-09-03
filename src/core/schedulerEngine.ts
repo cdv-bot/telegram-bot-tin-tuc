@@ -130,9 +130,14 @@ export class SchedulerEngine {
     const config = getConfig();
     const jobs = jobRegistry.getEnabled();
 
-    logger.info(`Đang thiết lập lịch trình tự động cho ${jobs.length} Jobs...`);
+    logger.info(`Đang kiểm tra và thiết lập lịch trình tự động cho ${jobs.length} Jobs...`);
 
     for (const job of jobs) {
+      if (job.autoSchedule === false || !job.cronSchedule) {
+        logger.info(`ℹ️ [Job: ${job.id}] "${job.name}" -> Tắt tự động gửi (Chỉ chạy thủ công / Lệnh Bot)`);
+        continue;
+      }
+
       const timezone = job.timezone || config.TIMEZONE;
 
       const cron = new Cron(
@@ -174,12 +179,15 @@ export class SchedulerEngine {
     return jobRegistry.getEnabled().map((job) => {
       const cron = this.cronInstances.get(job.id);
       const nextRun = cron?.nextRun();
+      const isAuto = job.autoSchedule !== false && !!job.cronSchedule;
       return {
         id: job.id,
         name: job.name,
         command: job.command,
-        cron: job.cronSchedule,
-        nextRun: nextRun ? nextRun.toLocaleString('vi-VN', { timeZone: job.timezone || config.TIMEZONE }) : 'N/A',
+        cron: isAuto ? job.cronSchedule! : 'Không tự động (Chạy qua lệnh Bot)',
+        nextRun: isAuto && nextRun
+          ? nextRun.toLocaleString('vi-VN', { timeZone: job.timezone || config.TIMEZONE })
+          : 'Thủ công (Chỉ chạy khi có lệnh)',
       };
     });
   }

@@ -66,7 +66,7 @@ export const registeredJobs: BotJob[] = [
 TELEGRAM_BOT_TOKEN="your_bot_token_here"
 TELEGRAM_CHAT_ID="your_telegram_id_here"
 TELEGRAM_ADMIN_CHAT_ID=""
-CRON_SCHEDULE="30 6 * * *"
+CRON_SCHEDULE="0 7 * * *"
 TIMEZONE="Asia/Ho_Chi_Minh"
 ```
 

@@ -6,7 +6,8 @@ export const goldPriceJob = defineJob({
   id: 'gold-price',
   name: 'Giá Vàng & Kim Loại Quý Realtime',
   description: 'Cập nhật giá Vàng (XAU/USD) và Bạc (XAG/USD) trực tiếp thời gian thực',
-  cronSchedule: '0 8,14 * * 1-5', // Tự động gửi lúc 8h và 14h các ngày giao dịch trong tuần
+  cronSchedule: process.env.GOLD_PRICE_CRON || '0 8,14 * * 1-5',
+  autoSchedule: process.env.GOLD_PRICE_AUTO === 'true', // Mặc định tắt gửi định kỳ, chỉ kích hoạt khi gõ lệnh Bot (/gold, /xau)
   command: 'gold',
   botType: 'FOREX',
   targetChatId: (config) => config.TELEGRAM_FOREX_CHAT_ID || config.TELEGRAM_GOLD_CHAT_ID || config.TELEGRAM_CHAT_ID,

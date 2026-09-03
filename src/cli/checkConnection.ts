@@ -23,7 +23,9 @@ async function main() {
       console.log('\n📋 DANH SÁCH AUTOMATION JOBS ĐÃ ĐĂNG KÝ:');
       for (const j of jobRegistry.getAll()) {
         const statusIcon = j.enabled !== false ? '🟢' : '⚪';
-        console.log(` ${statusIcon} [${j.id}] ${j.name} (Lệnh: /${j.command || 'none'}, Cron: ${j.cronSchedule})`);
+        const isAuto = j.autoSchedule !== false && !!j.cronSchedule;
+        const cronText = isAuto ? j.cronSchedule : 'Tắt tự động (Chạy qua lệnh Bot)';
+        console.log(` ${statusIcon} [${j.id}] ${j.name} (Lệnh: /${j.command || 'none'}, Cron: ${cronText})`);
       }
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
       process.exit(0);
