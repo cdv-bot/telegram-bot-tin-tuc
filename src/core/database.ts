@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import initSqlJs, { type Database as SqlJsDb, type SqlJsStatic, type Statement as SqlJsStmt } from 'sql.js';
 import path from 'path';
 import fs from 'fs';
 import { PATHS } from './env.js';
@@ -10,21 +10,258 @@ if (!fs.existsSync(PATHS.data)) {
   fs.mkdirSync(PATHS.data, { recursive: true });
 }
 
-// Cấu hình timeout 10 giây để an toàn đa tiến trình (multi-process / test runners)
-export const db: Database.Database = new Database(dbPath, {
-  timeout: 10000,
-});
-
-try {
-  // Tối ưu hiệu năng đọc ghi đồng thời với chế độ WAL (Write-Ahead Logging)
-  db.pragma('journal_mode = WAL');
-  db.pragma('synchronous = NORMAL');
-  db.pragma('busy_timeout = 10000');
-} catch (e: any) {
-  // Tránh lỗi khi nhiều worker cùng cấu hình pragma
+export interface RunResult {
+  changes: number;
+  lastInsertRowid: number | bigint;
 }
 
-// Khởi tạo các bảng
+export interface StatementWrapper {
+  run(...params: unknown[]): RunResult;
+  run(params: Record<string, unknown>): RunResult;
+  all(...params: unknown[]): unknown[];
+  all(params: Record<string, unknown>): unknown[];
+  get(...params: unknown[]): unknown;
+  get(params: Record<string, unknown>): unknown;
+}
+
+export interface DatabaseInstance {
+  pragma(_sql: string): unknown;
+  exec(sql: string): void;
+  prepare(sql: string): StatementWrapper;
+  transaction<T extends (...args: any[]) => any>(fn: T): T;
+  close(): void;
+}
+
+export namespace Database {
+  export type Database = DatabaseInstance;
+}
+
+let SQL: SqlJsStatic | null = null;
+
+function getSqlJs(): SqlJsStatic {
+  if (!SQL) {
+    throw new Error('sql.js chưa được khởi tạo. Hãy đảm bảo initDatabase() đã chạy.');
+  }
+  return SQL;
+}
+
+function convertNamedBindParams(
+  raw: Record<string, unknown>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    out[`$${key}`] = value;
+  }
+  return out;
+}
+
+function rowsToObjects(stmt: SqlJsStmt, columnNames: string[]): unknown[] {
+  const rows: unknown[] = [];
+  while (stmt.step()) {
+    const values = stmt.get();
+    const row: Record<string, unknown> = {};
+    for (let i = 0; i < columnNames.length; i++) {
+      row[columnNames[i]!] = values[i];
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+class SqlJsCompatibleDatabase implements DatabaseInstance {
+  private db: SqlJsDb;
+  private filePath: string;
+  private saveTimer: NodeJS.Timeout | null = null;
+  private pendingSave = false;
+
+  constructor(db: SqlJsDb, filePath: string) {
+    this.db = db;
+    this.filePath = filePath;
+  }
+
+  pragma(_sql: string): unknown {
+    return [];
+  }
+
+  exec(sql: string): void {
+    this.db.exec(sql);
+    this.requestSave();
+  }
+
+  prepare(sql: string): StatementWrapper {
+    const self = this;
+    const convertedSql = sql.replace(/@(\w+)/g, '$$$1');
+
+    function resolveBindArgs(args: unknown[]): unknown[] | Record<string, unknown> | undefined {
+      if (args.length === 0) return undefined;
+      if (args.length === 1 && typeof args[0] === 'object' && args[0] !== null && !Array.isArray(args[0])) {
+        return convertNamedBindParams(args[0] as Record<string, unknown>);
+      }
+      return args;
+    }
+
+    function runInternal(stmt: SqlJsStmt, args: unknown[]): RunResult {
+      const binds = resolveBindArgs(args);
+      try {
+        if (binds !== undefined) {
+          stmt.bind(binds as any);
+        }
+        stmt.step();
+      } catch (e) {
+        stmt.free();
+        throw e;
+      }
+
+      const changes = self.db.getRowsModified();
+      let lastInsertRowid: number | bigint = 0;
+      try {
+        const res = self.db.exec('SELECT last_insert_rowid() AS lid');
+        const raw = res[0]?.values?.[0]?.[0];
+        if (typeof raw === 'number' || typeof raw === 'bigint') {
+          lastInsertRowid = raw;
+        } else if (typeof raw === 'string') {
+          lastInsertRowid = Number(raw);
+        }
+      } catch {}
+
+      stmt.free();
+      self.requestSave();
+      return { changes, lastInsertRowid };
+    }
+
+    function allInternal(stmt: SqlJsStmt, args: unknown[]): unknown[] {
+      const binds = resolveBindArgs(args);
+      try {
+        if (binds !== undefined) {
+          stmt.bind(binds as any);
+        }
+        const cols = stmt.getColumnNames();
+        const rows = rowsToObjects(stmt, cols);
+        return rows;
+      } finally {
+        stmt.free();
+      }
+    }
+
+    function getInternal(stmt: SqlJsStmt, args: unknown[]): unknown {
+      const binds = resolveBindArgs(args);
+      try {
+        if (binds !== undefined) {
+          stmt.bind(binds as any);
+        }
+        if (!stmt.step()) {
+          return undefined;
+        }
+        const cols = stmt.getColumnNames();
+        const values = stmt.get();
+        const row: Record<string, unknown> = {};
+        for (let i = 0; i < cols.length; i++) {
+          row[cols[i]!] = values[i];
+        }
+        return row;
+      } finally {
+        stmt.free();
+      }
+    }
+
+    return {
+      run(...args: unknown[]): RunResult {
+        const stmt = self.db.prepare(convertedSql);
+        return runInternal(stmt, args);
+      },
+      all(...args: unknown[]): unknown[] {
+        const stmt = self.db.prepare(convertedSql);
+        return allInternal(stmt, args);
+      },
+      get(...args: unknown[]): unknown {
+        const stmt = self.db.prepare(convertedSql);
+        return getInternal(stmt, args);
+      },
+    };
+  }
+
+  transaction<T extends (...args: any[]) => any>(fn: T): T {
+    const self = this;
+    const wrapped = function (this: unknown, ...args: Parameters<T>): ReturnType<T> {
+      self.db.exec('BEGIN');
+      try {
+        const result = fn.apply(this, args);
+        self.db.exec('COMMIT');
+        self.requestSave();
+        return result;
+      } catch (e) {
+        try {
+          self.db.exec('ROLLBACK');
+        } catch {}
+        throw e;
+      }
+    } as T;
+    return wrapped;
+  }
+
+  private requestSave(): void {
+    this.pendingSave = true;
+    if (this.saveTimer) {
+      return;
+    }
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      if (this.pendingSave) {
+        this.flushSave();
+      }
+    }, 50);
+  }
+
+  private flushSave(): void {
+    this.pendingSave = false;
+    try {
+      const data = this.db.export();
+      const buffer = Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+      const tmp = `${this.filePath}.tmp`;
+      fs.writeFileSync(tmp, buffer);
+      fs.renameSync(tmp, this.filePath);
+    } catch (e: any) {
+      logger.error({ error: e?.message }, 'Lỗi lưu database sql.js vào đĩa');
+    }
+  }
+
+  close(): void {
+    this.flushSave();
+    try {
+      this.db.close();
+    } catch {}
+  }
+}
+
+function loadExistingDbBytes(): Uint8Array | undefined {
+  try {
+    if (fs.existsSync(dbPath)) {
+      const buf = fs.readFileSync(dbPath);
+      return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    }
+  } catch (e: any) {
+    logger.warn({ error: e?.message }, 'Không thể đọc file database cũ, sẽ tạo mới.');
+  }
+  return undefined;
+}
+
+SQL = await initSqlJs();
+
+const existingBytes = loadExistingDbBytes();
+const rawDb: SqlJsDb = existingBytes ? new SQL.Database(existingBytes) : new SQL.Database();
+
+export const db: Database.Database = new SqlJsCompatibleDatabase(rawDb, dbPath);
+
+try {
+  db.exec('PRAGMA journal_mode = WAL');
+} catch {}
+try {
+  db.exec('PRAGMA synchronous = NORMAL');
+} catch {}
+try {
+  db.exec('PRAGMA busy_timeout = 10000');
+} catch {}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS tracked_orders (
     id TEXT PRIMARY KEY,
@@ -62,12 +299,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_news_sent_at ON news_history(sent_at);
 `);
 
-/**
- * Tự động di chuyển dữ liệu cũ từ JSON sang SQLite nếu có
- */
 function migrateFromJsonIfNecessary() {
   try {
-    // 1. Migrate limit_orders.json
     const limitOrdersPath = path.join(PATHS.data, 'limit_orders.json');
     if (fs.existsSync(limitOrdersPath)) {
       const raw = fs.readFileSync(limitOrdersPath, 'utf-8').trim();
@@ -121,7 +354,6 @@ function migrateFromJsonIfNecessary() {
       }
     }
 
-    // 2. Migrate history.json
     const historyPath = path.join(PATHS.data, 'history.json');
     if (fs.existsSync(historyPath)) {
       const raw = fs.readFileSync(historyPath, 'utf-8').trim();
@@ -129,7 +361,7 @@ function migrateFromJsonIfNecessary() {
         const history = JSON.parse(raw);
         if (Array.isArray(history) && history.length > 0) {
           const insertHistory = db.prepare(`
-            INSERT OR IGNORE INTO news_history (id, url, title, sent_at)
+            INSERT OR REPLACE INTO news_history (id, url, title, sent_at)
             VALUES (@id, @url, @title, @sentAt)
           `);
 
