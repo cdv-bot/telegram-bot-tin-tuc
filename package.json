@@ -20,7 +20,9 @@
     "pm2:ls": "npx pm2 list",
     "pm2:logs": "npx pm2 logs telegram-bot",
     "pm2:log": "npx pm2 logs telegram-bot",
-    "test": "vitest run"
+    "test": "vitest run",
+    "price:gold": "tsx src/cli/runJob.ts price-gold",
+    "gold:sjc": "tsx src/cli/runJob.ts price-gold"
   },
   "keywords": [
     "telegram",

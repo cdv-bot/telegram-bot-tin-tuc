@@ -1,9 +1,9 @@
-import { jobRegistry } from '../core/jobRegistry.js';
-import { dailyNewsJob } from './dailyNews/index.js';
-import { githubTrendingJob } from './githubTrending/index.js';
-import { tradingSignalJob } from './tradingSignal/index.js';
-import { goldPriceJob } from './goldPrice/index.js';
-import type { BotJob } from '../core/types.js';
+import { jobRegistry } from "../core/jobRegistry.js";
+import { dailyNewsJob } from "./dailyNews/index.js";
+import { githubTrendingJob } from "./githubTrending/index.js";
+import { tradingSignalJob } from "./tradingSignal/index.js";
+import { goldPriceJob, sjcGoldPriceJob } from "./goldPrice/index.js";
+import type { BotJob } from "../core/types.js";
 
 // Danh sách tất cả các Jobs của hệ thống
 export const registeredJobs: BotJob[] = [
@@ -11,10 +11,10 @@ export const registeredJobs: BotJob[] = [
   githubTrendingJob,
   tradingSignalJob,
   goldPriceJob,
+  sjcGoldPriceJob,
 ];
 
 // Đăng ký toàn bộ vào JobRegistry trung tâm
 jobRegistry.registerAll(registeredJobs);
 
-export { dailyNewsJob, githubTrendingJob, tradingSignalJob, goldPriceJob };
-
+export { dailyNewsJob, githubTrendingJob, tradingSignalJob, goldPriceJob, sjcGoldPriceJob };

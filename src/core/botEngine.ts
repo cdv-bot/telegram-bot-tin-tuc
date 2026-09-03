@@ -133,6 +133,24 @@ export class BotEngine {
     mainBot.hears(/^\/(?:github[-_]?trending|github)(?:@\w+)?(?:\s+(.*))?$/i, handleGitHubTrending);
     mainBot.command(['github_trending', 'githubtrending', 'github'], handleGitHubTrending);
 
+    // Lắng nghe lệnh Giá Vàng SJC Việt Nam (/price_gold, /sjc, /giavang...)
+    const handlePriceGold = async (ctx: any) => {
+      const job = jobRegistry.get('price-gold');
+      if (job) {
+        await ctx.reply('⏳ Đang lấy giá vàng SJC Việt Nam thời gian thực từ VNAppMob...', { parse_mode: 'HTML' });
+        const result = await schedulerEngine.executeJob(job, {
+          customChatId: ctx.chat.id,
+          triggerType: 'BOT_COMMAND',
+        });
+        if (!result.success) {
+          await ctx.reply(`❌ Có lỗi khi lấy giá vàng SJC: ${result.error || 'Không xác định'}`);
+        }
+      }
+    };
+
+    mainBot.hears(/^\/(?:price[-_]?gold|pricegold|sjc|gia[-_]?vang|gold[-_]?vn)(?:@\w+)?(?:\s+(.*))?$/i, handlePriceGold);
+    mainBot.command(['price_gold', 'pricegold', 'sjc', 'giavang', 'gia_vang'], handlePriceGold);
+
     // Lệnh tiện ích chung trên Main Bot
     this.registerCommonCommands(mainBot, 'Tin Tức & GitHub Trending');
 
@@ -254,8 +272,12 @@ export class BotEngine {
       }
     });
 
-    // 2.5 Giá Vàng Realtime (/gold, /xau, /giavang, /goldprice, /vang)
-    targetForexBot.hears(/^\/(?:gold|xau|giavang|goldprice|vang)(?:@\w+)?(?:\s+(.*))?$/i, async (ctx) => {
+    // 2.5 Giá Vàng SJC Việt Nam (/price_gold, /sjc)
+    targetForexBot.hears(/^\/(?:price[-_]?gold|pricegold|sjc|gold[-_]?vn)(?:@\w+)?(?:\s+(.*))?$/i, handlePriceGold);
+    targetForexBot.command(['price_gold', 'pricegold', 'sjc'], handlePriceGold);
+
+    // 2.6 Giá Vàng Thế Giới Realtime (/gold, /xau, /goldprice, /vang)
+    targetForexBot.hears(/^\/(?:gold|xau|goldprice|vang)(?:@\w+)?(?:\s+(.*))?$/i, async (ctx) => {
       const job = jobRegistry.get('gold-price');
       if (job) {
         await ctx.reply(`⏳ Đang lấy giá vàng thế giới realtime từ Gold Price API...`, { parse_mode: 'HTML' });
@@ -300,10 +322,12 @@ export class BotEngine {
         msg += `• <b>/sl &lt;Entry&gt; &lt;TP&gt; &lt;SL&gt;</b>: Đặt lệnh Sell Limit\n`;
         msg += `• <b>/orders</b>: Xem danh sách lệnh đang theo dõi\n`;
         msg += `• <b>/cancel &lt;mã_lệnh&gt;</b>: Hủy lệnh theo dõi\n`;
-        msg += `• <b>/gold</b>: Xem giá vàng XAU/USD realtime\n`;
+        msg += `• <b>/gold</b>: Xem giá vàng XAU/USD thế giới realtime\n`;
+        msg += '• <b>/price_gold</b>: Xem giá vàng SJC Việt Nam realtime\n';
       } else {
         msg += `• <b>/digest</b>: Lấy bản tin điểm tin tức tổng hợp sáng\n`;
         msg += `• <b>/github_trending</b>: Xem top GitHub Trending Repositories\n`;
+        msg += '• <b>/price_gold</b>: Xem giá vàng SJC Việt Nam realtime\n';
       }
 
       msg += `\n⚙️ <b>Lệnh hệ thống:</b>\n`;
@@ -343,6 +367,7 @@ export class BotEngine {
       const mainCommands = [
         { command: 'digest', description: 'Xem bản tin điểm tin tổng hợp sáng' },
         { command: 'github_trending', description: 'Top GitHub Trending hôm nay' },
+        { command: 'price_gold', description: 'Giá Vàng SJC Việt Nam realtime' },
         { command: 'id', description: 'Xem Chat ID phòng chat hiện tại' },
         { command: 'status', description: 'Xem trạng thái hệ thống & lịch chạy' },
         { command: 'help', description: 'Xem hướng dẫn sử dụng' },
@@ -358,6 +383,7 @@ export class BotEngine {
           { command: 'orders', description: 'Xem danh sách lệnh Limit đang theo dõi' },
           { command: 'cancel', description: 'Hủy lệnh Limit (vd: /cancel ORD-123456 hoặc all)' },
           { command: 'gold', description: 'Xem giá Vàng XAU/USD realtime' },
+          { command: 'price_gold', description: 'Giá Vàng SJC Việt Nam realtime' },
           { command: 'id', description: 'Xem Chat ID phòng chat hiện tại' },
           { command: 'status', description: 'Xem trạng thái hệ thống & lịch chạy' },
           { command: 'help', description: 'Xem hướng dẫn sử dụng' },
